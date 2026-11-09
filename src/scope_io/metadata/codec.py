@@ -1,15 +1,15 @@
 import json
 from typing import Any, Mapping
 
-from fits_io.readers._types import ExtraTags
+from scope_io.readers._types import ExtraTags
 
-FITS_TAG = 65000
+ARTIFACT_METADATA_TAG = 65000
 
 def encode_metadata(payload: Mapping[str, Any]) -> ExtraTags | None:
     """Encode private metadata payload for storage in TIFF extra tags."""
     if payload:
         raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        return [(FITS_TAG, "B", len(raw), raw, True)]
+        return [(ARTIFACT_METADATA_TAG, "B", len(raw), raw, True)]
     return None
 
 

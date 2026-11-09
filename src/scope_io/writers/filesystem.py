@@ -1,7 +1,7 @@
 from pathlib import Path
 import re
 
-from fits_io.readers.protocol import ImageReader
+from scope_io.readers.protocol import ImageReader
 
 
 
@@ -19,7 +19,7 @@ def get_save_dir(img_reader: ImageReader) -> Path:
     base_name = img_reader.img_path.stem
     parent_dir = img_reader.img_path.parent
 
-    # Already inside a FITS series directory
+    # Already inside a image series directory
     if _ends_with_s_number(parent_dir.name):
         return parent_dir
 

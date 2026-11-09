@@ -2,11 +2,11 @@ from pathlib import Path
 
 import numpy as np
 
-from fits_io.writers import core
+from scope_io.writers import core
 
 
 def test_fast_lossless_compression_round_trip(tmp_path: Path) -> None:
-    from fits_io.metadata.tiff_meta import TiffWriteMeta
+    from scope_io.metadata.tiff_meta import TiffWriteMeta
     from tifffile import TiffFile, imread
     array = np.zeros((4, 30, 31), dtype=np.uint16)
     array[:, 4:20, 5:21] = 4

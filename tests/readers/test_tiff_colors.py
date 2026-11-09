@@ -7,9 +7,9 @@ from numpy.typing import NDArray
 import pytest
 from tifffile import TiffPage, imwrite
 
-from fits_io import FitsIO
-from fits_io.metadata.imageJ_meta import make_color_lut
-from fits_io.readers.r_tiff import TiffReader
+from scope_io import ScopeIO
+from scope_io.metadata.imageJ_meta import make_color_lut
+from scope_io.readers.r_tiff import TiffReader
 
 
 @pytest.mark.parametrize("channels", [1, 4])
@@ -33,7 +33,7 @@ def test_cached_imagej_colors_are_metadata_only(tmp_path: Path, monkeypatch: pyt
         pytest.fail("Color lookup decoded image pixels")
 
     monkeypatch.setattr(TiffPage, "asarray", forbid_pixels)
-    image = FitsIO.from_path(path)
+    image = ScopeIO.from_path(path)
     assert image.channel_colors == ["#0000ff", "#00ff00", "#fe0000", "#ffffff"][:channels]
     assert image.resolve_channel_selection().source_labels == ["blue", "green", "red", "white"][:channels]
 

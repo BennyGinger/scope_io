@@ -1,14 +1,14 @@
-# fits-io
+# ScopeIO
 
-`fits-io` is the image I/O and artifact-format layer for FITS. It presents ND2
-and TIFF microscopy data through one `FitsIO` façade, keeps axis and channel
-identity explicit, and writes ImageJ-compatible TIFF files with structured FITS
-metadata embedded in them.
+`scope-io` is a standalone microscopy image I/O library. It presents ND2
+and TIFF microscopy data through one `ScopeIO` façade, keeps axis and channel
+identity explicit, and writes ImageJ-compatible TIFF files with portable artifact
+metadata embedded in them. It does not depend on the FITS application.
 
 ```python
-from fits_io import FitsIO
+from scope_io import ScopeIO
 
-image = FitsIO.from_path("experiment.nd2")
+image = ScopeIO.from_path("experiment.nd2")
 result = image.get_channel("GFP", z_projection="max")
 
 print(result.array.shape, result.axes)
@@ -34,7 +34,7 @@ invalid or black channel colors remain unknown. No image pixels are read.
 
 `image.get_plane(frame_index=0, channel=0, z_index=0)` reads a YX plane from
 ND2 or TIFF without loading the full stack. Choose an ND2 position or TIFF
-series with `FitsIO.from_path(path, series_idx=1)` (zero-based). ND2 reads one
+series with `ScopeIO.from_path(path, series_idx=1)` (zero-based). ND2 reads one
 acquisition frame, which contains its channels, and returns an independent copy
 of the selected channel before closing the file's memory map.
 
@@ -47,16 +47,57 @@ display color is green.
 
 `save_array(..., crop_xy=(x0, y0, x1, y1))` applies an exclusive XY pixel crop
 across every other dimension, using the array's axes metadata. It preserves
-channel identity, FITS/custom metadata, pixel calibration, and timing, and adds
+channel identity, artifact/custom metadata, pixel calibration, and timing, and adds
 the source shape, bounds, and offset to `spatial_crops` metadata. ImageJ spatial
 origins are adjusted for the crop. Serialized annotations can be supplied with
 `imagej_overlays`; the caller must first clip/shift them into crop coordinates.
 Use `compression="none"` for overlay hyperstacks opened with ImageJ's native
 TIFF opener.
 
-## Role in FITS
+## Metadata and the 3.0 API
 
-FITS decides which artifact a workflow step requires and where its result
-belongs. `fits-io` performs the actual reads and writes and carries provenance,
+The Python package is `scope_io`; its distribution is `scope-io`. Version 3.0
+renames the former `fits_io` API:
+
+| Previous name | New name |
+| --- | --- |
+| `from fits_io import FitsIO` | `from scope_io import ScopeIO` |
+| `FitsIOMeta` | `ImageMetadata` (also exported at package level) |
+| `metadata.fits_io` | `metadata.artifact` |
+| `metadata.with_fitsio(...)` | `metadata.with_artifact(...)` |
+| `fitsio_metadata=` in the writer API | `image_metadata=` |
+| `FITS_TAG` | `ARTIFACT_METADATA_TAG` (still TIFF tag 65000) |
+
+```python
+from scope_io import ImageMetadata
+
+metadata = ImageMetadata().with_artifact(axes="YX", channel_labels=["GFP"])
+assert metadata.dump()["artifact"]["axes"] == "YX"
+```
+
+Readers accept both the historical serialized `fits_io` key and the neutral
+`artifact` key. New writes emit only `artifact`. Matching duplicate keys are
+accepted; conflicting duplicate keys raise an error instead of discarding
+provenance. Historical producer names, revisions and application-owned custom
+metadata are retained. Reading a legacy file does not modify it.
+
+There is no `fits_io` import shim or old Python API alias: consumers must update
+their imports and API calls. Old application versions that only understand the
+serialized `fits_io` key need updating before using newly written files. Existing
+files do not need a bulk migration. The stale, nonfunctional `fits-io` CLI entry
+point has been removed; ScopeIO is a Python library.
+
+The default output filename is now `array.tif`. Callers can continue supplying
+their own names. ScopeIO does not rename workflow output files or folders.
+
+## Application boundary
+
+An application such as FITS decides which artifact a workflow step requires and
+where its result belongs. ScopeIO performs the actual reads and writes and carries provenance,
 axis information, calibration, and custom metadata across those operations.
-The processing submodules therefore receive arrays rather than file paths.
+Processing modules can therefore receive arrays rather than file paths.
+
+## Development checks
+
+From this repository, run `uv run --group dev pytest` and
+`uv run --group dev pyright`. Build distributions with `uv build`.

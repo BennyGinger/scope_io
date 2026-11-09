@@ -6,7 +6,7 @@ import nd2
 from nd2.structures import Color
 import pytest
 
-from fits_io.readers.r_nd2 import Nd2Reader
+from scope_io.readers.r_nd2 import Nd2Reader
 
 
 @pytest.mark.parametrize("colors, expected", [

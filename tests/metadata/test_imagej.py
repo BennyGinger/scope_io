@@ -1,12 +1,12 @@
 import json
 
-from fits_io.metadata.tiff_meta import assemble_tiff_metadata
-from fits_io.metadata.models import FitsIOMeta
-from fits_io.metadata.codec import FITS_TAG
+from scope_io.metadata.tiff_meta import assemble_tiff_metadata
+from scope_io.metadata.models import ImageMetadata
+from scope_io.metadata.codec import ARTIFACT_METADATA_TAG
 
 
-def _make_payload() -> FitsIOMeta:
-    return FitsIOMeta().with_fitsio(
+def _make_payload() -> ImageMetadata:
+    return ImageMetadata().with_artifact(
         version="x",
         axes="TZCYX",
         channel_labels=["GFP", "mCherry"],
@@ -26,7 +26,7 @@ def test_build_tiff_metadata_basic_fields():
 
 
 def test_build_tiff_metadata_encodes_payload_in_extratags():
-    payload = FitsIOMeta().with_fitsio(
+    payload = ImageMetadata().with_artifact(
         version="x",
         axes="TZCYX",
         channel_labels=["GFP", "mCherry"],
@@ -38,10 +38,10 @@ def test_build_tiff_metadata_encodes_payload_in_extratags():
 
     assert out.extratags is not None
     tag, dtype, count, raw, writeonce = out.extratags[0]
-    assert tag == FITS_TAG
+    assert tag == ARTIFACT_METADATA_TAG
     assert dtype == "B"
     assert count == len(raw)
     assert writeonce is True
     decoded = json.loads(raw.decode("utf-8"))
-    assert decoded["fits_io"]["z_projection"] == "mean"
+    assert decoded["artifact"]["z_projection"] == "mean"
     assert decoded["custom_metadata"]["param"] == "value"

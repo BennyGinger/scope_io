@@ -2,38 +2,38 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 from collections.abc import Sequence
 from pathlib import Path
-import json
+from json import JSONDecodeError
 import logging
 
-from fits_io.metadata.codec import FITS_TAG
-from fits_io.metadata.models import FitsIOMeta
+from scope_io.metadata.codec import ARTIFACT_METADATA_TAG, decode_metadata
+from scope_io.metadata.models import ImageMetadata
 import numpy as np
 from numpy.typing import NDArray
 from tifffile import TiffFile, TiffPage, TiffPageSeries, COMPRESSION, TiffTag
 
-from fits_io.readers._types import PixelSize, Zproj, validate_axes
-from fits_io.readers.protocol import ImageReader
+from scope_io.readers._types import PixelSize, Zproj, validate_axes
+from scope_io.readers.protocol import ImageReader
 
 
 logger = logging.getLogger(__name__)
 
 @dataclass
 class TiffReader(ImageReader):
-    # Inherited fields from ImageReader: 
+    # Inherited fields from ImageReader:
         # img_path: Path
         # series_idx: int = 0
         # _shape: tuple[int, ...] = field(init=False)
         # _axes: str = field(init=False)
-    
+
     # Additional fields specific to TiffReader
     _series_list: list[TiffPageSeries] = field(init=False)
     _compression_method: str | None = field(init=False)
     _resolution: PixelSize | None = field(init=False)
     _imageJ_meta: dict[str, Any] = field(init=False)
-    _metadata: FitsIOMeta = field(init=False)
+    _metadata: ImageMetadata = field(init=False)
     _plane_offsets: tuple[int, ...] = field(init=False, default=())
     _plane_ndim: int = field(init=False, default=0)
-    
+
     @classmethod
     def can_read(cls, path: Path) -> bool:
         return path.suffix.lower() in ['.tif', '.tiff']
@@ -45,17 +45,17 @@ class TiffReader(ImageReader):
             self._shape = series.shape
             self._axes = series.axes
             validate_axes(self._axes)
-            
+
             self._resolution = self._get_resolution_from_tags(cast(TiffPage, series.pages[0]))
-            
+
             self._imageJ_meta = tif.imagej_metadata or {}
-            
+
             self._compression_method = self._get_compression_from_tags(cast(TiffPage, series.pages[0]))
-            
-            meta = cast(TiffPage, series.pages[0]).tags.get(FITS_TAG)
+
+            meta = cast(TiffPage, series.pages[0]).tags.get(ARTIFACT_METADATA_TAG)
             self._metadata = self._get_metadata_from_tags(meta)
-            
-            # Creating an address map for each image page in the series, once. 
+
+            # Creating an address map for each image page in the series, once.
             # This allows quick access to the pages without reopening the file.
             first_page = series.pages[0]
             if (isinstance(first_page, TiffPage) and self._imageJ_meta
@@ -67,21 +67,21 @@ class TiffReader(ImageReader):
                 if len(offsets) == expected and all(offset > 0 for offset in offsets):
                     self._plane_offsets = offsets
                     self._plane_ndim = page_ndim
-    
+
     @property
     def has_series(self) -> bool:
         return len(self._series_list) > 1
-    
+
     @property
     def series_count(self) -> int:
         return len(self._series_list)
-    
+
     def split_series(self) -> list[ImageReader]:
         if not self.has_series:
             return [self]
-        
+
         return [TiffReader(self.img_path, series_idx=i) for i in range(self.series_count)]
-    
+
     @property
     def shape(self) -> tuple[int, ...]:
         return self._shape
@@ -113,77 +113,75 @@ class TiffReader(ImageReader):
             valid = bool(np.all((lut >= 0) & (lut <= 255)))
             colors.append(f"#{red:02x}{green:02x}{blue:02x}" if valid and (red or green or blue) else None)
         return colors
-    
+
     @property
     def axes(self) -> str:
         return self._axes
-    
+
     def _get_compression_from_tags(self, tiff_page: TiffPage) -> str | None:
         comp = COMPRESSION(tiff_page.tags["Compression"].value)
         return comp.name if comp != COMPRESSION.NONE else None
-    
+
     def _get_resolution_from_tags(self, tiff_page: TiffPage) -> PixelSize | None:
         xres = tiff_page.tags.get('XResolution')
         yres = tiff_page.tags.get('YResolution')
-        
+
         if xres is None or yres is None:
             return None
-        
+
         xres = xres.value[0]/xres.value[1]
         x_um_per_pix = round(1./float(xres), 4)
         yres = yres.value[0]/yres.value[1]
         y_um_per_pix = round(1./float(yres), 4)
         return (x_um_per_pix, y_um_per_pix)
-    
-    def _get_metadata_from_tags(self, meta_tag: TiffTag | None) -> FitsIOMeta:
+
+    def _get_metadata_from_tags(self, meta_tag: TiffTag | None) -> ImageMetadata:
         if meta_tag is None:
-            return FitsIOMeta()
-        
-        v = meta_tag.value
-        if isinstance(v, (bytes, bytearray)):
-            v = v.decode("utf-8", "replace")
+            return ImageMetadata()
+
         try:
-            return FitsIOMeta.from_dict(json.loads(v))
-        except Exception:
-            logger.warning("FITS_TAG present but not valid JSON")
-            return FitsIOMeta()
-    
+            payload = decode_metadata(meta_tag.value)
+        except (JSONDecodeError, TypeError):
+            logger.warning("Artifact metadata tag contains invalid JSON.")
+            return ImageMetadata()
+        return ImageMetadata.from_dict(payload)
+
     @property
     def compression_method(self) -> str | None:
-        return self._compression_method 
-    
+        return self._compression_method
+
     @property
     def zproj_method(self) -> Zproj:
-        fits_meta = self._metadata.fits_io
-        if fits_meta is None:
+        artifact_meta = self._metadata.artifact
+        if artifact_meta is None:
             return None
         else:
-            return fits_meta.z_projection
-    
+            return artifact_meta.z_projection
+
     @property
     def channel_count(self) -> int:
         if 'C' in self._axes:
             c_idx = self._axes.index('C')
             return self._shape[c_idx]
         return 1
-    
+
     @property
     def resolution(self) -> PixelSize | None:
         return self._resolution
-                
+
     @property
     def interval(self) -> float | None:
         return self._imageJ_meta.get('finterval', None)
-    
+
     @property
-    def metadata(self) -> FitsIOMeta:
+    def metadata(self) -> ImageMetadata:
         return self._metadata
-    
+
     def get_array(self, z_projection: Zproj = None) -> NDArray[Any]:
         with TiffFile(self.img_path) as tif:
             series = tif.series[self.series_idx]
             arr = series.asarray()
-            
+
         return self._project_z(arr, self.axes, z_projection)
 
     def _project_z(self, array: NDArray[Any],
@@ -268,7 +266,7 @@ class TiffReader(ImageReader):
             s = tif.series[self.series_idx]
             axes = s.axes
             shape = s.shape
-            
+
             page_axes = [ax for ax in axes if ax not in ("Y", "X")]
             page_shape = [shape[axes.index(ax)] for ax in page_axes]
 
@@ -295,29 +293,29 @@ class TiffReader(ImageReader):
 
             if len(c_list) == 1:
                 chan_arr = np.squeeze(chan_arr, axis=page_axes.index("C"))
-        
+
         axes_after = self.axes
         if len(c_list) == 1:
             # If only one channel is selected, drop the C axis from the output
             axes_after = self.axes.replace('C', '')
-        
-        return self._project_z(chan_arr, axes_after, z_projection)
-    
 
-    
+        return self._project_z(chan_arr, axes_after, z_projection)
+
+
+
 if __name__ == "__main__":
     from pathlib import Path
-    
-    file_path = Path("/media/ben/Analysis/Python/Images/zymosan/zym_chamber_500k_WT_HoxB8_001_s1/fits_array.tif")
-    
+
+    file_path = Path("example.tif")
+
     reader = TiffReader(file_path)
-    
+
     arr = reader.get_array(z_projection=None)
     print(f"Array shape: {arr.shape}")
-    
+
     chan_arr = reader.get_channel([0,1], z_projection=None)
     print(f"Channel array shape: {chan_arr.shape}")
-    
+
     print(reader.compression_method)
     print(reader.zproj_method)
     print(reader.has_series)

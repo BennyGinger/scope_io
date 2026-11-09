@@ -6,13 +6,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence, Callable
 
-from fits_io.metadata.models import FitsIOMeta
-from fits_io.readers._types import Zproj
+from scope_io.metadata.models import ImageMetadata
+from scope_io.readers._types import Zproj
 import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from fits_io.readers.protocol import ImageReader
+from scope_io.readers.protocol import ImageReader
 
 
 # ============================================================
@@ -21,7 +21,7 @@ from fits_io.readers.protocol import ImageReader
 
 @pytest.fixture
 def fake_tiff_metadata():
-    """Factory returning a simple stand-in for fits_io.metadata.TiffMetadata."""
+    """Factory returning a simple stand-in for scope_io.metadata.TiffMetadata."""
     def _make(*, imagej_meta: dict[str, Any] | None = None,
               resolution: tuple[float, float] | None = None,
               extratags: list[tuple[Any, ...]] | None = None):
@@ -147,9 +147,9 @@ class DummyReader(ImageReader):
         return self.get_array().shape
 
     @property
-    def metadata(self) -> FitsIOMeta:
+    def metadata(self) -> ImageMetadata:
         indices = list(range(self.channel_count))
-        return FitsIOMeta().with_fitsio(
+        return ImageMetadata().with_artifact(
             channel_labels=list(self._labels or []),
             source_channel_indices=indices,
             artifact_channel_indices=indices,)
@@ -313,11 +313,11 @@ def fake_tiff_file_with_info() -> Callable[[Path], FakeTiff]:
 def fake_tiff_file_with_status() -> Callable[[Path], FakeTiff]:
     def _factory(path: Path):
         import json
-        from fits_io.metadata.codec import FITS_TAG
-        
+        from scope_io.metadata.codec import ARTIFACT_METADATA_TAG
+
         tags = [
             FakeTag("Compression", 1),
-            FakeTag("CustomTag", json.dumps({"fits_io": {"z_projection": "mean"}}).encode("utf-8"), code=FITS_TAG)
+            FakeTag("CustomTag", json.dumps({"artifact": {"z_projection": "mean"}}).encode("utf-8"), code=ARTIFACT_METADATA_TAG)
         ]
         return FakeTiff(axes="YX", shape=(5, 6), tags=tags, imagej_metadata={})
     return _factory
@@ -345,11 +345,11 @@ def fake_tiff_file_with_label_list() -> Callable[[Path], FakeTiff]:
 def fake_tiff_file_with_custom_meta() -> Callable[[Path], FakeTiff]:
     def _factory(path: Path):
         import json
-        from fits_io.metadata.codec import FITS_TAG
-        
+        from scope_io.metadata.codec import ARTIFACT_METADATA_TAG
+
         tags = [
             FakeTag("Compression", 1),
-            FakeTag("CustomTag", json.dumps({"fits_io": {"z_projection": "max"}, "extra": "data"}).encode("utf-8"), code=FITS_TAG)
+            FakeTag("CustomTag", json.dumps({"artifact": {"z_projection": "max"}, "extra": "data"}).encode("utf-8"), code=ARTIFACT_METADATA_TAG)
         ]
         return FakeTiff(axes="YX", shape=(5, 6), tags=tags, imagej_metadata={})
     return _factory
@@ -515,18 +515,18 @@ def fake_nd2_file_with_labels():
         class ChannelMeta:
             def __init__(self, name):
                 self.name = name
-        
+
         class ChannelWithMeta:
             def __init__(self, name):
                 self.channel = ChannelMeta(name)
-        
+
         class MetaWithLabels:
             channels = [
                 ChannelWithMeta("DAPI"),
                 ChannelWithMeta("GFP"),
                 ChannelWithMeta("RFP"),
             ]
-        
+
         sizes = {"C": 3, "Y": 5, "X": 6}
         meta = MetaWithLabels()
         exploop = []
@@ -571,7 +571,7 @@ class WriterHarness:
 
 @pytest.fixture
 def writer_harness(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> WriterHarness:
-    import fits_io.writers.apis as writer_mod
+    import scope_io.writers.apis as writer_mod
 
     h = WriterHarness(tmp_path=tmp_path, writer_mod=writer_mod)
     h.save_dirs = [tmp_path / "img_s1"]
@@ -626,6 +626,6 @@ def writer_harness_tiff(monkeypatch: pytest.MonkeyPatch, writer_harness: WriterH
     Same harness, but makes DummyReader pass the `isinstance(..., TiffReader)` guard
     used in metadata-rewrite helpers.
     """
-    import fits_io.writers.apis as writer_mod
+    import scope_io.writers.apis as writer_mod
     monkeypatch.setattr(writer_mod, "TiffReader", type(dummy_reader))
     return writer_harness

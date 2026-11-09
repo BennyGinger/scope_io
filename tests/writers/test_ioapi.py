@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from fits_io.writers import apis
-from fits_io.metadata.resolve import resolve_channel_selection
+from scope_io.writers import apis
+from scope_io.metadata.resolve import resolve_channel_selection
 
 
 def _set_channel_array(dummy_reader, channel_count: int) -> None:
@@ -21,13 +21,13 @@ def _set_channel_array(dummy_reader, channel_count: int) -> None:
 
 def test_prepare_conversion_returns_output_path(monkeypatch, dummy_reader) -> None:
     _set_channel_array(dummy_reader, 3)
-    out_path = dummy_reader.img_path.with_name("fits.tif")
+    out_path = dummy_reader.img_path.with_name("array.tif")
     monkeypatch.setattr(
         apis, "build_output_path", lambda _reader, save_name: out_path)
     selection = resolve_channel_selection(None, dummy_reader.channel_count)
 
     result = apis.prepare_conversion(
-        dummy_reader, selection=selection, output_name="fits.tif")
+        dummy_reader, selection=selection, output_name="array.tif")
 
     assert result.output_path == out_path
 
@@ -42,7 +42,7 @@ def test_prepare_conversion_reads_selected_channels(monkeypatch, dummy_reader) -
         lambda _reader, save_name: dummy_reader.img_path.with_name(save_name),)
 
     apis.prepare_conversion(
-        dummy_reader, selection=selection, output_name="fits.tif")
+        dummy_reader, selection=selection, output_name="array.tif")
 
     assert dummy_reader.last_get_channel_arg == [1, 2]
 
@@ -57,10 +57,10 @@ def test_prepare_conversion_sets_channel_lineage(monkeypatch, dummy_reader) -> N
         lambda _reader, save_name: dummy_reader.img_path.with_name(save_name),)
 
     result = apis.prepare_conversion(
-        dummy_reader, selection=selection, output_name="fits.tif")
+        dummy_reader, selection=selection, output_name="array.tif")
 
-    assert result.metadata.fits_io.source_channel_indices == [0, 1, 2]
-    assert result.metadata.fits_io.artifact_channel_indices == [1, 2]
+    assert result.metadata.artifact.source_channel_indices == [0, 1, 2]
+    assert result.metadata.artifact.artifact_channel_indices == [1, 2]
 
 
 def test_prepare_conversion_passes_custom_metadata(monkeypatch, dummy_reader) -> None:
@@ -74,7 +74,7 @@ def test_prepare_conversion_passes_custom_metadata(monkeypatch, dummy_reader) ->
     result = apis.prepare_conversion(
         dummy_reader,
         selection=selection,
-        output_name="fits.tif",
+        output_name="array.tif",
         custom_metadata={"run_id": 7},)
 
     assert result.metadata.custom_metadata == {"run_id": 7}

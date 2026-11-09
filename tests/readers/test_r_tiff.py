@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from fits_io.readers.r_tiff import TiffReader
+from scope_io.readers.r_tiff import TiffReader
 
 
 
@@ -11,7 +11,7 @@ from fits_io.readers.r_tiff import TiffReader
 def test_tiff_axes_channel_series_resolution_interval(monkeypatch, tmp_path: Path, fake_tiff_file_full):
     p = tmp_path / "x.tif"
     p.write_bytes(b"fake")
-    monkeypatch.setattr("fits_io.readers.r_tiff.TiffFile", fake_tiff_file_full)
+    monkeypatch.setattr("scope_io.readers.r_tiff.TiffFile", fake_tiff_file_full)
 
     r = TiffReader(p)
     assert r.axes == "CYX"
@@ -25,7 +25,7 @@ def test_tiff_get_array_no_series(monkeypatch, tmp_path: Path, fake_tiff_file_no
     p = tmp_path / "x.tif"
     p.write_bytes(b"fake")
 
-    monkeypatch.setattr("fits_io.readers.r_tiff.TiffFile", fake_tiff_file_no_series_axes)
+    monkeypatch.setattr("scope_io.readers.r_tiff.TiffFile", fake_tiff_file_no_series_axes)
 
     r = TiffReader(p)
     out = r.get_array()
@@ -37,7 +37,7 @@ def test_tiff_get_array_with_series_splits(monkeypatch, tmp_path: Path, fake_tif
     p = tmp_path / "x.tif"
     p.write_bytes(b"fake")
 
-    monkeypatch.setattr("fits_io.readers.r_tiff.TiffFile", fake_tiff_file_series_S0)
+    monkeypatch.setattr("scope_io.readers.r_tiff.TiffFile", fake_tiff_file_series_S0)
 
     r = TiffReader(p)
     out = r.get_array()
@@ -45,11 +45,11 @@ def test_tiff_get_array_with_series_splits(monkeypatch, tmp_path: Path, fake_tif
     assert out.shape == (5, 6)
 
 
-def test_tiff_zproj_from_fits_io_metadata(tmp_path: Path, fake_tiff_file_with_status, monkeypatch):
+def test_tiff_zproj_from_artifact_metadata(tmp_path: Path, fake_tiff_file_with_status, monkeypatch):
     p = tmp_path / "x.tif"
     p.write_bytes(b"fake")
-    monkeypatch.setattr("fits_io.readers.r_tiff.TiffFile", fake_tiff_file_with_status)
-    
+    monkeypatch.setattr("scope_io.readers.r_tiff.TiffFile", fake_tiff_file_with_status)
+
     r = TiffReader(p)
     assert r.zproj_method == "mean"
 
@@ -57,8 +57,8 @@ def test_tiff_zproj_from_fits_io_metadata(tmp_path: Path, fake_tiff_file_with_st
 def test_tiff_zproj_default_none(tmp_path: Path, fake_tiff_file_no_series, monkeypatch):
     p = tmp_path / "x.tif"
     p.write_bytes(b"fake")
-    monkeypatch.setattr("fits_io.readers.r_tiff.TiffFile", fake_tiff_file_no_series)
-    
+    monkeypatch.setattr("scope_io.readers.r_tiff.TiffFile", fake_tiff_file_no_series)
+
     r = TiffReader(p)
     assert r.zproj_method is None
 
@@ -66,17 +66,17 @@ def test_tiff_zproj_default_none(tmp_path: Path, fake_tiff_file_no_series, monke
 def test_tiff_metadata_with_payload_json(tmp_path: Path, fake_tiff_file_with_custom_meta, monkeypatch):
     p = tmp_path / "x.tif"
     p.write_bytes(b"fake")
-    monkeypatch.setattr("fits_io.readers.r_tiff.TiffFile", fake_tiff_file_with_custom_meta)
+    monkeypatch.setattr("scope_io.readers.r_tiff.TiffFile", fake_tiff_file_with_custom_meta)
 
     r = TiffReader(p)
-    assert r.metadata.fits_io.z_projection == "max"
+    assert r.metadata.artifact.z_projection == "max"
 
 
 def test_tiff_compression_method(tmp_path: Path, fake_tiff_file_with_compression, monkeypatch):
     p = tmp_path / "x.tif"
     p.write_bytes(b"fake")
-    monkeypatch.setattr("fits_io.readers.r_tiff.TiffFile", fake_tiff_file_with_compression)
-    
+    monkeypatch.setattr("scope_io.readers.r_tiff.TiffFile", fake_tiff_file_with_compression)
+
     r = TiffReader(p)
     assert r.compression_method == "ADOBE_DEFLATE"
 
@@ -84,8 +84,8 @@ def test_tiff_compression_method(tmp_path: Path, fake_tiff_file_with_compression
 def test_tiff_channel_number_no_c_axis(tmp_path: Path, fake_tiff_file_no_series, monkeypatch):
     p = tmp_path / "x.tif"
     p.write_bytes(b"fake")
-    monkeypatch.setattr("fits_io.readers.r_tiff.TiffFile", fake_tiff_file_no_series)
-    
+    monkeypatch.setattr("scope_io.readers.r_tiff.TiffFile", fake_tiff_file_no_series)
+
     r = TiffReader(p)
     assert r.channel_count == 1
 
@@ -93,8 +93,8 @@ def test_tiff_channel_number_no_c_axis(tmp_path: Path, fake_tiff_file_no_series,
 def test_tiff_channel_number_with_c_axis(tmp_path: Path, fake_tiff_file_with_label_list, monkeypatch):
     p = tmp_path / "x.tif"
     p.write_bytes(b"fake")
-    monkeypatch.setattr("fits_io.readers.r_tiff.TiffFile", fake_tiff_file_with_label_list)
-    
+    monkeypatch.setattr("scope_io.readers.r_tiff.TiffFile", fake_tiff_file_with_label_list)
+
     r = TiffReader(p)
     assert r.channel_count == 3
 
@@ -103,13 +103,13 @@ def test_tiff_get_array_with_z_projection_max(tmp_path: Path, fake_tiff_file_no_
     """Test z-projection with max method."""
     p = tmp_path / "x.tif"
     p.write_bytes(b"fake")
-    
+
     # Create array with Z axis shape (2, 3, 4) -> ZYX
     test_arr = np.array([[[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]],
                          [[2, 3, 4, 5], [6, 7, 8, 9], [10, 11, 12, 13]]], dtype=np.uint8)
-    
-    monkeypatch.setattr("fits_io.readers.r_tiff.TiffFile", fake_tiff_file_no_series_axes)
-    
+
+    monkeypatch.setattr("scope_io.readers.r_tiff.TiffFile", fake_tiff_file_no_series_axes)
+
     class _FakeSeries:
         axes = "ZYX"
         shape = test_arr.shape
@@ -129,8 +129,8 @@ def test_tiff_get_array_with_z_projection_max(tmp_path: Path, fake_tiff_file_no_
         def __exit__(self, *args):
             return False
 
-    monkeypatch.setattr("fits_io.readers.r_tiff.TiffFile", lambda _p: _FakeTiff())
-    
+    monkeypatch.setattr("scope_io.readers.r_tiff.TiffFile", lambda _p: _FakeTiff())
+
     r = TiffReader(p)
     out = r.get_array(z_projection='max')
     assert isinstance(out, np.ndarray)
@@ -142,7 +142,7 @@ def test_tiff_get_array_with_z_projection_max(tmp_path: Path, fake_tiff_file_no_
 def test_tiff_get_channel_single_channel_without_c_axis_returns_full_array(tmp_path: Path, fake_tiff_file_no_series, monkeypatch):
     p = tmp_path / "x.tif"
     p.write_bytes(b"fake")
-    monkeypatch.setattr("fits_io.readers.r_tiff.TiffFile", fake_tiff_file_no_series)
+    monkeypatch.setattr("scope_io.readers.r_tiff.TiffFile", fake_tiff_file_no_series)
 
     r = TiffReader(p)
     out = r.get_channel(0)

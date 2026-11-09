@@ -2,16 +2,16 @@ from pathlib import Path
 
 import pytest
 
-from fits_io.readers.factory import (
+from scope_io.readers.factory import (
     get_reader,
     ImageReaderError,
     ReaderFileNotFoundError,
     UnsupportedFileTypeError,
     READER_BY_SUFFIX,
 )
-from fits_io.readers.r_tiff import TiffReader
-from fits_io.readers.r_nd2 import Nd2Reader
-from fits_io.readers.protocol import ImageReader
+from scope_io.readers.r_tiff import TiffReader
+from scope_io.readers.r_nd2 import Nd2Reader
+from scope_io.readers.protocol import ImageReader
 
 
 # -------------------------
@@ -23,7 +23,7 @@ def test_get_reader_tif(tmp_path: Path, monkeypatch, fake_tiff_file_no_series):
     p = tmp_path / "image.tif"
     p.write_bytes(b"fake")
     # Patch TiffFile where it's imported in r_tiff module
-    import fits_io.readers.r_tiff as r_tiff
+    import scope_io.readers.r_tiff as r_tiff
     monkeypatch.setattr(r_tiff, "TiffFile", fake_tiff_file_no_series)
 
     r = get_reader(p)
@@ -35,7 +35,7 @@ def test_get_reader_tiff_extension(tmp_path: Path, monkeypatch, fake_tiff_file_n
     """Test getting a TiffReader for .tiff files."""
     p = tmp_path / "image.tiff"
     p.write_bytes(b"fake")
-    import fits_io.readers.r_tiff as r_tiff
+    import scope_io.readers.r_tiff as r_tiff
     monkeypatch.setattr(r_tiff, "TiffFile", fake_tiff_file_no_series)
 
     r = get_reader(p)
@@ -47,7 +47,7 @@ def test_get_reader_nd2(tmp_path: Path, monkeypatch, fake_nd2_file_basic):
     p = tmp_path / "image.nd2"
     p.write_bytes(b"fake")
     # Patch nd2.ND2File where it's used in r_nd2 module
-    import fits_io.readers.r_nd2 as r_nd2
+    import scope_io.readers.r_nd2 as r_nd2
     monkeypatch.setattr(r_nd2.nd2, "ND2File", fake_nd2_file_basic)
 
     r = get_reader(p)
@@ -59,7 +59,7 @@ def test_get_reader_with_string_path(tmp_path: Path, monkeypatch, fake_tiff_file
     """Test that get_reader accepts string paths."""
     p = tmp_path / "image.tif"
     p.write_bytes(b"fake")
-    import fits_io.readers.r_tiff as r_tiff
+    import scope_io.readers.r_tiff as r_tiff
     monkeypatch.setattr(r_tiff, "TiffFile", fake_tiff_file_no_series)
 
     r = get_reader(str(p))
@@ -70,7 +70,7 @@ def test_get_reader_with_multi_channel_tiff(tmp_path: Path, monkeypatch, fake_ti
     """Test that get_reader returns a valid reader for a multi-channel TIFF."""
     p = tmp_path / "image.tif"
     p.write_bytes(b"fake")
-    import fits_io.readers.r_tiff as r_tiff
+    import scope_io.readers.r_tiff as r_tiff
     monkeypatch.setattr(r_tiff, "TiffFile", fake_tiff_file_full)
 
     r = get_reader(p)
@@ -85,10 +85,10 @@ def test_get_reader_with_multi_channel_tiff(tmp_path: Path, monkeypatch, fake_ti
 def test_get_reader_file_not_found():
     """Test that ReaderFileNotFoundError is raised for non-existent files."""
     p = Path("/nonexistent/path/to/file.tif")
-    
+
     with pytest.raises(ReaderFileNotFoundError) as exc_info:
         get_reader(p)
-    
+
     assert "Path not found" in str(exc_info.value)
 
 
@@ -96,7 +96,7 @@ def test_get_reader_path_is_directory(tmp_path: Path):
     """Test that ReaderFileNotFoundError is raised for directories."""
     with pytest.raises(ReaderFileNotFoundError) as exc_info:
         get_reader(tmp_path)
-    
+
     assert "not a file" in str(exc_info.value)
 
 
@@ -104,10 +104,10 @@ def test_get_reader_unsupported_file_type(tmp_path: Path):
     """Test that UnsupportedFileTypeError is raised for unsupported types."""
     p = tmp_path / "image.jpg"
     p.write_bytes(b"fake")
-    
+
     with pytest.raises(UnsupportedFileTypeError) as exc_info:
         get_reader(p)
-    
+
     assert "Unsupported file type" in str(exc_info.value)
     assert ".jpg" in str(exc_info.value)
 
@@ -116,10 +116,10 @@ def test_get_reader_unsupported_file_type_lists_supported(tmp_path: Path):
     """Test that error message lists supported file types."""
     p = tmp_path / "image.png"
     p.write_bytes(b"fake")
-    
+
     with pytest.raises(UnsupportedFileTypeError) as exc_info:
         get_reader(p)
-    
+
     error_msg = str(exc_info.value)
     assert "Supported:" in error_msg
     assert ".tif" in error_msg or ".tiff" in error_msg
@@ -130,7 +130,7 @@ def test_get_reader_case_insensitive_extension(tmp_path: Path, monkeypatch, fake
     """Test that file extensions are case-insensitive."""
     p = tmp_path / "image.TIF"
     p.write_bytes(b"fake")
-    import fits_io.readers.r_tiff as r_tiff
+    import scope_io.readers.r_tiff as r_tiff
     monkeypatch.setattr(r_tiff, "TiffFile", fake_tiff_file_no_series)
 
     r = get_reader(p)
@@ -141,7 +141,7 @@ def test_get_reader_mixed_case_extension(tmp_path: Path, monkeypatch, fake_tiff_
     """Test mixed case extensions work."""
     p = tmp_path / "image.TiFf"
     p.write_bytes(b"fake")
-    import fits_io.readers.r_tiff as r_tiff
+    import scope_io.readers.r_tiff as r_tiff
     monkeypatch.setattr(r_tiff, "TiffFile", fake_tiff_file_no_series)
 
     r = get_reader(p)

@@ -1,5 +1,5 @@
-from fits_io.metadata.codec import FITS_TAG
+from scope_io.metadata.codec import ARTIFACT_METADATA_TAG
 
 
 def test_fits_tag_constant_is_stable():
-    assert FITS_TAG == 65000
+    assert ARTIFACT_METADATA_TAG == 65000

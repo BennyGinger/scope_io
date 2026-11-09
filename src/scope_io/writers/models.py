@@ -8,10 +8,10 @@ from numpy.typing import DTypeLike, NDArray
 import numpy as np
 
 if TYPE_CHECKING:
-    from fits_io.client import FitsIO
+    from scope_io.client import ScopeIO
 
-from fits_io.readers._types import validate_axes
-from fits_io.metadata.models import FitsIOMeta
+from scope_io.readers._types import validate_axes
+from scope_io.metadata.models import ImageMetadata
 
 
 T = TypeVar('T', bound=np.generic)
@@ -21,7 +21,7 @@ T = TypeVar('T', bound=np.generic)
 class ChannelSelection:
     """
     Represents the selection of channels for export, including the source labels, export labels, and export indices.
-    
+
     Attributes:
         source_labels: The original channel labels from the reader.
         export_labels: The labels of the channels to be exported.
@@ -30,11 +30,11 @@ class ChannelSelection:
     source_labels: list[str]
     export_labels: list[str]
     export_indices: list[int]
-    
+
     def validate_array(self, array_shape: tuple[int, ...], axes: str) -> None:
         """
         Validate that the provided array shape and axes match the expected channel selection.
-        
+
         Args:
             array_shape: The shape of the array to validate.
             axes: The axes string corresponding to the array.
@@ -59,18 +59,18 @@ class ChannelSelection:
 class ConversionPreparation:
     array: NDArray[Any]
     output_path: Path
-    metadata: FitsIOMeta
-    
+    metadata: ImageMetadata
+
 
 @dataclass(slots=True, frozen=True)
 class ArrayResult:
     array: NDArray[Any]
     axes: str
-    
+
 
 @dataclass(slots=True, frozen=True)
 class ChannelSubset(Generic[T]):
-    reader: FitsIO
+    reader: ScopeIO
     array: NDArray[T]
     channel_positions: tuple[int, ...]
 
@@ -90,7 +90,7 @@ class ChannelSubset(Generic[T]):
 
         return tuple(source_indices[position]
                      for position in self.channel_positions)
-    
+
     def rebuild(self, processed_array: NDArray[T], *, dtype: DTypeLike | None = None) -> NDArray[Any]:
         """Restore excluded channels, optionally converting the whole output dtype."""
         if processed_array.shape != self.array.shape:
@@ -101,7 +101,7 @@ class ChannelSubset(Generic[T]):
             return processed_array if dtype is None else processed_array.astype(dtype, copy=False)
 
         return self.reader.replace_channels(self.channel_positions, processed_array, dtype=dtype)
-    
+
 
 @dataclass(slots=True, frozen=True)
 class ChannelMergeResult:

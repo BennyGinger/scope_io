@@ -3,7 +3,7 @@
 from collections import Counter
 from collections.abc import Sequence
 
-from fits_io.metadata.imageJ_meta import COLOR_MAP
+from scope_io.metadata.imageJ_meta import COLOR_MAP
 
 
 def channel_color_name(color: str | None) -> str | None:

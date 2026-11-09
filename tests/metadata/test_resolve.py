@@ -1,6 +1,6 @@
 import pytest
 
-from fits_io.metadata.resolve import ChannelSelection, resolve_output_axes, resolve_channel_selection
+from scope_io.metadata.resolve import ChannelSelection, resolve_output_axes, resolve_channel_selection
 
 
 def test_resolve_axes_preserves_reader_axes_when_no_transforms():
@@ -16,7 +16,7 @@ def test_resolve_axes_drops_z_when_projected():
 def test_resolve_axes_drops_c_for_single_channel():
     out = resolve_output_axes(reader_axes="TCYX", z_projection=None, n_channels=1)
     assert out == "TYX"
-    
+
 
 def test_resolve_channel_selection_defaults_labels_and_exports_all():
     sel = resolve_channel_selection(None, n_channels=3, export_channels="all")

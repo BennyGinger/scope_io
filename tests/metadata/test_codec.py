@@ -1,7 +1,7 @@
 import json
 
-from fits_io.metadata.codec import decode_metadata, encode_metadata
-from fits_io.metadata.codec import FITS_TAG
+from scope_io.metadata.codec import decode_metadata, encode_metadata
+from scope_io.metadata.codec import ARTIFACT_METADATA_TAG
 
 
 def test_encode_metadata_with_data_returns_tiff_tag_payload():
@@ -9,7 +9,7 @@ def test_encode_metadata_with_data_returns_tiff_tag_payload():
     result = encode_metadata(payload)
     assert result is not None
     tag, dtype, count, raw, writeonce = result[0]
-    assert tag == FITS_TAG
+    assert tag == ARTIFACT_METADATA_TAG
     assert dtype == 'B'
     assert count == len(raw)
     assert writeonce is True

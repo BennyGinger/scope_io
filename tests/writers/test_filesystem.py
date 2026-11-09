@@ -1,22 +1,16 @@
 # tests/test_writer.py
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 import pytest
+from conftest import DummyReader
 
-from fits_io.writers.filesystem import (
+from scope_io.writers.filesystem import (
     _ends_with_s_number,
     build_output_path,
     create_save_path,
     get_save_dir,
 )
-
-
-@dataclass
-class DummyReader:
-    img_path: Path
-    series_idx: int = 0
 
 # -----------------------------
 # Filesystem tests (unchanged)
@@ -26,8 +20,8 @@ def test_build_output_path_joins_series_dir_and_save_name(tmp_path: Path) -> Non
     source_dir = tmp_path / "input"
     reader = DummyReader(img_path=source_dir / "sample.tif", series_idx=0)
 
-    out = build_output_path(reader, save_name="fits_masks.tif")
-    assert out == source_dir / "sample_s1" / "fits_masks.tif"
+    out = build_output_path(reader, save_name="masks.tif")
+    assert out == source_dir / "sample_s1" / "masks.tif"
     assert out.parent.is_dir()
 
 
@@ -63,14 +57,14 @@ def test_get_save_dir_resolves_one_folder_per_series(tmp_path: Path) -> None:
     ]
 
 # Test the regex helper
-def test_ends_with_s_number_valid():
+def test_ends_with_s_number_valid() -> None:
     """Test valid _sN patterns."""
     assert _ends_with_s_number("experiment_s1")
     assert _ends_with_s_number("experiment_s01")
     assert _ends_with_s_number("experiment_s123")
     assert _ends_with_s_number("my_data_s5")
 
-def test_ends_with_s_number_invalid():
+def test_ends_with_s_number_invalid() -> None:
     """Test invalid patterns that should NOT match."""
     assert not _ends_with_s_number("experiment")
     assert not _ends_with_s_number("experiment_s")
@@ -79,16 +73,16 @@ def test_ends_with_s_number_invalid():
     assert not _ends_with_s_number("experiment_s1a")  # Has letter after
     assert not _ends_with_s_number("experiment_s1_extra")  # Has more after
 
-# Test get_save_dirs with FITS file
-def test_get_save_dirs_already_fits_file(tmp_path: Path):
+# Test get_save_dirs with an existing series directory
+def test_get_save_dirs_already_series_file(tmp_path: Path) -> None:
     """When input is already in _sN directory, return parent as-is."""
-    fits_dir = tmp_path / "experiment_s1"
-    fits_dir.mkdir(parents=True)
-    input_path = fits_dir / "array.tif"
+    series_dir = tmp_path / "experiment_s1"
+    series_dir.mkdir(parents=True)
+    input_path = series_dir / "array.tif"
     input_path.write_bytes(b"")
-    
+
     directory = get_save_dir(DummyReader(img_path=input_path, series_idx=0))
-    assert directory == fits_dir
+    assert directory == series_dir
 
 def test_create_save_path_uses_directory_or_file_parent(tmp_path: Path) -> None:
     assert create_save_path(tmp_path, "result.tif") == tmp_path / "result.tif"

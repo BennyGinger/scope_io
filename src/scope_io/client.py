@@ -6,38 +6,38 @@ from typing import Any, TypeVar
 from collections.abc import Mapping, Sequence
 from numpy.typing import DTypeLike, NDArray
 import numpy as np
-from fits_io.metadata.provenance import input_reference
-from fits_io.metadata.models import FitsIOMeta
-from fits_io.metadata.payload import build_payload
-from fits_io.metadata.resolve import channel_label_warning, resolve_channel_selection, resolve_output_axes
-from fits_io.metadata.channel_colors import conversion_channel_labels
-from fits_io.readers.protocol import ImageReader
-from fits_io.readers._types import Zproj
-from fits_io.readers.factory import get_reader
-from fits_io.writers.apis import apply_zproj, merge_channel_arrays, prepare_conversion, save_array, set_channel_labels
-from fits_io.writers.models import ChannelMergeResult, ConversionPreparation, ArrayResult, ChannelSubset, ChannelSelection
-from fits_io.writers.filesystem import create_save_path
+from scope_io.metadata.provenance import input_reference
+from scope_io.metadata.models import ImageMetadata
+from scope_io.metadata.payload import build_payload
+from scope_io.metadata.resolve import channel_label_warning, resolve_channel_selection, resolve_output_axes
+from scope_io.metadata.channel_colors import conversion_channel_labels
+from scope_io.readers.protocol import ImageReader
+from scope_io.readers._types import Zproj
+from scope_io.readers.factory import get_reader
+from scope_io.writers.apis import apply_zproj, merge_channel_arrays, prepare_conversion, save_array, set_channel_labels
+from scope_io.writers.models import ChannelMergeResult, ConversionPreparation, ArrayResult, ChannelSubset, ChannelSelection
+from scope_io.writers.filesystem import DEFAULT_SAVE_NAME, create_save_path
 
 
-DEFAULT_OUTPUT_NAME = 'fits.tif'
+DEFAULT_OUTPUT_NAME = DEFAULT_SAVE_NAME
 
 
 T = TypeVar('T', bound=np.generic)
 
 
-class FitsIO:
+class ScopeIO:
     """
-    Facade class for FITS I/O operations, providing simplified access to reading and converting FITS files.
+    Facade class for microscopy image I/O, with explicit axes and channel identities.
     """
     def __init__(self, reader: ImageReader) -> None:
         """
-        Initialize the FitsIO state and dependencies.
+        Initialize the ScopeIO state and dependencies.
         """
         self.reader = reader
 
 
     @classmethod
-    def from_path(cls, path: str | Path, *, series_idx: int = 0) -> FitsIO:
+    def from_path(cls, path: str | Path, *, series_idx: int = 0) -> ScopeIO:
         """
         Open a supported image through the reader factory.
         """
@@ -54,9 +54,9 @@ class FitsIO:
 
 
     @property
-    def metadata(self) -> FitsIOMeta:
+    def metadata(self) -> ImageMetadata:
         """
-        Returns the FITS metadata.
+        Returns the artifact metadata.
         """
         return self.reader.metadata
 
@@ -68,7 +68,7 @@ class FitsIO:
 
         Note: If none are found, it returns the default labels C_1, C_2, ..., C_n.
         """
-        labels = self.metadata.fits_io.channel_labels
+        labels = self.metadata.artifact.channel_labels
         if labels is None:
             n_channels = self.reader.channel_count
             labels = [f"C_{i+1}" for i in range(n_channels)]
@@ -95,7 +95,7 @@ class FitsIO:
         """
         Returns the current source indices of the artifacts.
         """
-        return self.metadata.fits_io.artifact_channel_indices
+        return self.metadata.artifact.artifact_channel_indices
 
 
     @property
@@ -103,7 +103,7 @@ class FitsIO:
         """
         Returns the original source channel indices from the metadata, if available.
         """
-        return self.metadata.fits_io.source_channel_indices
+        return self.metadata.artifact.source_channel_indices
 
 
     def set_channel_labels(self,
@@ -122,7 +122,7 @@ class FitsIO:
             channel_labels : New channel labels to set, either a single string for one channel or a sequence of strings for multiple channels.
             compression : Compression method to use for the TIFF file. By default,
                 retain the source TIFF's compression.
-            custom_metadata : Optional updated FITS metadata; existing values
+            custom_metadata : Optional updated artifact metadata; existing values
                 are retained when omitted.
         """
         path = set_channel_labels(self.reader,
@@ -192,15 +192,15 @@ class FitsIO:
         self.reader = get_reader(path)  # Reload the reader to reflect updated metadata.
 
 
-    def split_series(self) -> list[FitsIO]:
+    def split_series(self) -> list[ScopeIO]:
         """
-        Split the current image into multiple series readers and return a list of FitsIO instances for each series.
+        Split the current image into multiple series readers and return a list of ScopeIO instances for each series.
 
         Returns:
-            List of FitsIO instances, one for each series in the original image.
+            List of ScopeIO instances, one for each series in the original image.
         """
         series_readers = self.reader.split_series()
-        return [FitsIO(reader) for reader in series_readers]
+        return [ScopeIO(reader) for reader in series_readers]
 
 
     def labels_to_indices(self, requested_labels: str | Sequence[str]) -> list[int]:
@@ -269,10 +269,10 @@ class FitsIO:
                                   channel_colors: Sequence[str | None] | None = None,
                                   ) -> ChannelSelection:
         """
-        Resolve channel indices and labels from the provided channel selector(s) and export channels. To ensure that updated metadata is saved in the output file, this function should be called before ``convert_to_fits`` or ``save_array``.
+        Resolve channel indices and labels from the provided channel selector(s) and export channels. To ensure that updated metadata is saved in the output file, this function should be called before ``save_array``.
 
         Args:
-            channel_labels : Optional labels for source channels (used for mapping), if None, default labels will be used. 
+            channel_labels : Optional labels for source channels (used for mapping), if None, default labels will be used.
             export_channels : Subset channels to export. Can be 'all' or a list of channel labels, by default 'all'.
             channel_colors : Optional shared source palette; by default use this reader's source colors.
 
@@ -292,7 +292,7 @@ class FitsIO:
 
     def resolve_channel_positions(self, channels: int | str | Sequence[int | str]) -> list[int]:
         """
-        Resolve channel position from the provided channel selector(s) to always return a list of integer indices. 
+        Resolve channel position from the provided channel selector(s) to always return a list of integer indices.
         """
         if isinstance(channels, (int, str)):
             channels = [channels]
@@ -311,7 +311,7 @@ class FitsIO:
 
         if len(positions) != len(set(positions)):
             raise ValueError(f"Duplicate channel selection: {channels!r}.")
-        return positions    
+        return positions
 
 
     def prepare_conversion(self,
@@ -348,7 +348,7 @@ class FitsIO:
                    created_by: str | None = None,
                    z_projection: Zproj = None,
                    custom_metadata: Mapping[str, Any] | None = None,
-                   metadata: FitsIOMeta | None = None,
+                   metadata: ImageMetadata | None = None,
                    output_name: str = DEFAULT_OUTPUT_NAME,
                    output_path: Path | None = None,
                    compression: str | None = 'zlib',
@@ -357,13 +357,13 @@ class FitsIO:
                    crop_xy: tuple[int, int, int, int] | None = None,
                    ) -> Path:
         """
-        Save an array to a FITS TIFF.
+        Save an array to a metadata-rich TIFF.
 
         ``compressionargs`` forwards codec options, such as ``{"level": 1}``
         for faster lossless zlib writing.
 
         ``imagej_overlays`` embeds serialized ImageJ ROIs in the TIFF header,
-        independently of the image pixels and FITS metadata.
+        independently of the image pixels and artifact metadata.
         Use ``compression="none"`` for overlay hyperstacks opened natively by
         ImageJ; its compressed-stack reader may omit the overlay.
 
@@ -378,25 +378,25 @@ class FitsIO:
             - By default, the output path is constructed from the current reader's path and ``output_name``. A fully constructed path may instead be supplied through ``output_path``. If so, then ``output_name`` is ignored.
 
         Args:
-            array : 
+            array :
                 The NumPy array to save.
-            export_channels : 
+            export_channels :
                 Subset channels to export. Can be 'all' or a list of channel labels.
-            artifact_type : 
+            artifact_type :
                 Type of artifact to set in the metadata. If None, it will use the current type. By default None.
-            created_by : 
+            created_by :
                 Optional string to set as the creator in the metadata (e.g. distributor). If None, it will use the current creator. By default None.
-            z_projection : 
+            z_projection :
                 Z-projection method to apply ('max', 'mean', 'sum', 'std', or None). If None, it will use the current z-projection. By default None.
-            custom_metadata : 
+            custom_metadata :
                 Additional custom metadata to include in the TIFF file. If None, it will use the current custom metadata. By default None.
-            metadata : 
-                Optional pre-built FitsIOMeta object to use for saving. If provided, it will override the other metadata parameters.
-            output_name : 
-                Name of the output TIFF file. Ignored if ``output_path`` is provided. By default 'fits.tif'.
-            output_path : 
+            metadata :
+                Optional pre-built ImageMetadata object to use for saving. If provided, it will override the other metadata parameters.
+            output_name :
+                Name of the output TIFF file. Ignored if ``output_path`` is provided. By default 'array.tif'.
+            output_path :
                 Optional full path for the output TIFF file. If provided, it will override ``output_name``.
-            compression : 
+            compression :
                 Compression method to use for the TIFF file. If None, no compression is applied. By default 'zlib'.
 
         Returns:
@@ -419,7 +419,7 @@ class FitsIO:
 
         return save_array(self.reader,
                           array,
-                          fitsio_metadata=meta,
+                          image_metadata=meta,
                           output_path=output_path,
                           compression=compression,
                           compressionargs=compressionargs,
@@ -437,26 +437,26 @@ class FitsIO:
                       z_projection: Zproj = None,
                       custom_metadata: Mapping[str, Any] | None = None,
                       array_shape: tuple[int, ...] | None = None,
-                      ) -> FitsIOMeta:
+                      ) -> ImageMetadata:
         """
-        Build a FITS I/O metadata payload based on the current reader and provided parameters.
+        Build a image artifact metadata payload based on the current reader and provided parameters.
 
         Args:
-            export_channels : 
+            export_channels :
                 Subset channels to export. Can be 'all' or a list of channel labels.
-            artifact_type : 
+            artifact_type :
                 Type of artifact to set in the metadata, by default None.
-            created_by : 
+            created_by :
                 Optional string to set as the creator in the metadata (e.g. distributor), by default None.
-            z_projection : 
+            z_projection :
                 Z-projection method to apply ('max', 'mean', 'sum', 'std', or None), by default None.
-            custom_metadata :   
+            custom_metadata :
                 Additional custom metadata to include in the TIFF file, by default None.
-            array_shape : 
+            array_shape :
                 Optional shape of the array to validate against the channel selection. If None, no validation is performed.
 
         Returns:
-            FitsIOMeta: The constructed FITS I/O metadata payload.
+            ImageMetadata: The constructed image artifact metadata payload.
         """
         if channel_labels is None:
             channel_labels = self.channel_labels
@@ -529,7 +529,7 @@ class FitsIO:
         expected_shape = tuple(expected_shape)
 
         if replacement.shape != expected_shape:
-            raise ValueError("Replacement shape does not match the selected channels: " + 
+            raise ValueError("Replacement shape does not match the selected channels: " +
                              f"expected {expected_shape}, got {replacement.shape}.")
 
         output_view = np.moveaxis(output, channel_axis, 0)
@@ -541,7 +541,7 @@ class FitsIO:
 
     def merge_channels(self,
                        *,
-                       existing: FitsIO | None,
+                       existing: ScopeIO | None,
                        new_array: NDArray[Any],
                        new_axes: str,
                        new_channel_indices: Sequence[int],
@@ -631,7 +631,7 @@ class FitsIO:
         Resolve multichannel positions.
         """
         mapping = {label: position
-                   for position, label in enumerate(labels)} 
+                   for position, label in enumerate(labels)}
 
         positions = []
 

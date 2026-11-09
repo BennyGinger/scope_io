@@ -7,17 +7,17 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from fits_io.readers._types import Zproj
-from fits_io.readers.protocol import ImageReader
-from fits_io.readers.r_tiff import TiffReader
-from fits_io.metadata.models import FitsIOMeta
-from fits_io.metadata.tiff_meta import assemble_tiff_metadata
-from fits_io.metadata.resolve import move_or_add_channel_axis, resolve_channel_selection, resolve_merged_axes, resolve_output_axes
-from fits_io.metadata.payload import assemble_payload, build_payload
-from fits_io.writers.models import ChannelMergeResult, ConversionPreparation, ChannelSelection
-from fits_io.writers.core import save_tiff
-from fits_io.writers.crop import crop_array_xy
-from fits_io.writers.filesystem import build_output_path
+from scope_io.readers._types import Zproj
+from scope_io.readers.protocol import ImageReader
+from scope_io.readers.r_tiff import TiffReader
+from scope_io.metadata.models import ImageMetadata
+from scope_io.metadata.tiff_meta import assemble_tiff_metadata
+from scope_io.metadata.resolve import move_or_add_channel_axis, resolve_channel_selection, resolve_merged_axes, resolve_output_axes
+from scope_io.metadata.payload import assemble_payload, build_payload
+from scope_io.writers.models import ChannelMergeResult, ConversionPreparation, ChannelSelection
+from scope_io.writers.core import save_tiff
+from scope_io.writers.crop import crop_array_xy
+from scope_io.writers.filesystem import build_output_path
 
 
 
@@ -47,15 +47,15 @@ def prepare_conversion(img_reader: ImageReader,
     Returns:
         The selected and optionally projected image array.
     """
-    array = img_reader.get_channel(channel=selection.export_indices, 
+    array = img_reader.get_channel(channel=selection.export_indices,
                                    z_projection=z_projection,)
-    
+
     # ImageJ TIFF supports float32, but not NumPy reduction float64/uint64.
     if z_projection in {"mean", "sum", "std"} and "Z" in img_reader.axes:
         array = array.astype(np.float32)
 
     output_path = build_output_path(img_reader, save_name=output_name)
-    
+
     metadata = build_payload(img_reader,
                              selection=selection,
                              artifact_kind=artifact_kind,
@@ -63,36 +63,36 @@ def prepare_conversion(img_reader: ImageReader,
                              z_projection=z_projection,
                              custom_metadata=custom_metadata,
                              array_shape=array.shape,)
-    return ConversionPreparation(array=array, 
+    return ConversionPreparation(array=array,
                                  output_path=output_path,
                                  metadata=metadata)
 
 
-def save_array(img_reader: ImageReader, 
-               array: NDArray[Any], 
-               *, 
-               fitsio_metadata: FitsIOMeta,
-               output_path: Path, 
+def save_array(img_reader: ImageReader,
+               array: NDArray[Any],
+               *,
+               image_metadata: ImageMetadata,
+               output_path: Path,
                compression: str | None = 'zlib',
                compressionargs: dict[str, Any] | None = None,
                imagej_overlays: Sequence[bytes] | None = None,
                crop_xy: tuple[int, int, int, int] | None = None,
                ) -> Path:
     """
-    Save the given array to a FITS TIFF file with ImageJ metadata.
-    
+    Save the given array to a metadata-rich TIFF file with ImageJ metadata.
+
     Policy:
     - This function will only save the provided array to a new file with the specified output name.
     - The metadata will be retrieved from the image reader, except for any custom metadata provided, which will be added or merged to existing metadata.
     - Multi-series inputs are not supported here by design.
-    
+
     Args:
         img_reader : An ImageReader instance for the input image.
         array : The NumPy array to save.
         output_path : The path of the output TIFF file.
-        fitsio_metadata : The FitsIOMeta object containing the metadata to write to the output file.
+        image_metadata : The ImageMetadata object containing the metadata to write to the output file.
         compression : Compression method to use for the TIFF file. Defaults to zlib.
-    
+
     Returns:
         Path: The path of the saved TIFF file.
     """
@@ -103,16 +103,16 @@ def save_array(img_reader: ImageReader,
         current_compression = compression
 
     if crop_xy is not None:
-        axes = fitsio_metadata.fits_io.axes or img_reader.axes
+        axes = image_metadata.artifact.axes or img_reader.axes
         source_shape = list(array.shape)
         array = crop_array_xy(array, axes, crop_xy)
-        crops = list(fitsio_metadata.custom_metadata.get("spatial_crops", []))
+        crops = list(image_metadata.custom_metadata.get("spatial_crops", []))
         crops.append({"source_axes": axes, "source_shape": source_shape,
                       "bounds_xy": [int(value) for value in crop_xy],
                       "offset_xy": [int(value) for value in crop_xy[:2]]})
-        fitsio_metadata = fitsio_metadata.with_custom_metadata({"spatial_crops": crops})
-    meta_write = assemble_tiff_metadata(fitsio_metadata, 
-                                        img_reader.interval, 
+        image_metadata = image_metadata.with_custom_metadata({"spatial_crops": crops})
+    meta_write = assemble_tiff_metadata(image_metadata,
+                                        img_reader.interval,
                                         img_reader.resolution)
     if crop_xy is not None:
         # Retain TIFF calibration, with origins expressed in the cropped coordinates.
@@ -124,70 +124,70 @@ def save_array(img_reader: ImageReader,
         meta_write.imagej_meta["yorigin"] = float(source_meta.get("yorigin", 0)) - crop_xy[1]
     if imagej_overlays:
         meta_write.imagej_meta["Overlays"] = list(imagej_overlays)
-    
+
     save_tiff(array, output_path, meta_write, compression=current_compression, compressionargs=compressionargs)
     return output_path
 
 
-def set_channel_labels(img_reader: ImageReader, 
-                       channel_labels: str | Sequence[str], 
+def set_channel_labels(img_reader: ImageReader,
+                       channel_labels: str | Sequence[str],
                        compression: str | None = None,
                        custom_metadata: Mapping[str, Any] | None = None,
                        ) -> Path:
     """
     Set the channel labels in the metadata.
-    
+
     Policy:
     - This function will change the channel labels in metadata, and re-save it with updated metadata.
     - It will not recreate an artifact, just update the metadata in the existing file.
     - Multi-series inputs are not supported here by design.
-    
+
     Args:
         img_reader : An ImageReader instance for the input image. Only reader from .tif is supported.
         channel_labels : New channel labels to set, either a single string for one channel or a sequence of strings for multiple channels.
         compression : Compression method to use for the TIFF file. By default,
             retain the source TIFF's compression.
-        custom_metadata : Optional updated FITS metadata; existing values are
+        custom_metadata : Optional updated artifact metadata; existing values are
             retained when omitted.
     """
     if not isinstance(img_reader, TiffReader):
         raise TypeError("set_channel_labels only supports .tif/.tiff files.")
-    
+
     # Resolve channel labels and export channels
-    selection = resolve_channel_selection(channel_labels, 
+    selection = resolve_channel_selection(channel_labels,
                                           n_channels=img_reader.channel_count)
-    
+
     # Get existing metadata to preserve other fields
     meta = assemble_payload(img_reader.metadata,
                          channel_labels=selection.export_labels,
                          custom_metadata=custom_metadata)
-    meta_write = assemble_tiff_metadata(meta, 
-                                        img_reader.interval, 
+    meta_write = assemble_tiff_metadata(meta,
+                                        img_reader.interval,
                                         img_reader.resolution)
     # A label change must not discard ImageJ display state, especially the
     # independent ROI overlays written by the tracking viewer.
     for key, value in getattr(img_reader, "imagej_metadata", {}).items():
         if key not in {"Info", "Labels", "mode", "LUTs", "axes"}:
             meta_write.imagej_meta[key] = value
-    
+
     # Get array to save (no z-projection applied here)
     array = img_reader.get_array()
     save_tiff(array, img_reader.img_path, meta_write,
               compression=img_reader.compression_method if compression is None else compression)
-    return img_reader.img_path 
+    return img_reader.img_path
 
 
-def apply_zproj(img_reader: ImageReader, 
-                z_projection: Zproj = None, 
+def apply_zproj(img_reader: ImageReader,
+                z_projection: Zproj = None,
                 compression: str | None = 'zlib'
                 ) -> Path:
     """
     Apply z-projection to the image array and update the file with the projected array and updated metadata.
-    
+
     Policy:
     - This function will apply the specified z-projection to the existing array and re-save it with updated metadata.
     - Multi-series inputs are not supported here by design.
-    
+
     Args:
         img_reader : An ImageReader instance for the input image. Only reader from .tif is supported.
         z_projection : The z-projection method to apply ('max', 'mean', 'sum', 'std', or None). If None, no projection is applied.
@@ -195,17 +195,17 @@ def apply_zproj(img_reader: ImageReader,
     """
     if not isinstance(img_reader, TiffReader):
         raise TypeError("apply_zproj only supports .tif/.tiff files.")
-    
+
     out_axes = resolve_output_axes(img_reader.axes, z_projection, img_reader.channel_count)
-    
+
     # Get existing metadata to preserve other fields
     meta = assemble_payload(img_reader.metadata,
                          z_projection=z_projection,
                          axes=out_axes,)
-    meta_write = assemble_tiff_metadata(meta, 
-                                        img_reader.interval, 
+    meta_write = assemble_tiff_metadata(meta,
+                                        img_reader.interval,
                                         img_reader.resolution)
-    
+
     # Get array to save
     array = img_reader.get_array(z_projection)
     save_tiff(array, img_reader.img_path, meta_write, compression=compression)

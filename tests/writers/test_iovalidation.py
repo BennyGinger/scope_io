@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from fits_io.metadata.resolve import resolve_channel_selection
+from scope_io.metadata.resolve import resolve_channel_selection
 
 
 def test_resolve_channel_selection_none_defaults_all():

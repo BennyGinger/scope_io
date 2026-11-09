@@ -1,9 +1,9 @@
-from fits_io.metadata.models import FitsIOMeta
-from fits_io.metadata.payload import assemble_payload
+from scope_io.metadata.models import ImageMetadata
+from scope_io.metadata.payload import assemble_payload
 
 
-def test_build_payload_sets_requested_fits_io_fields():
-    base = FitsIOMeta()
+def test_build_payload_sets_requested_artifact_fields():
+    base = ImageMetadata()
     out = assemble_payload(
         base,
         axes="TCYX",
@@ -13,23 +13,23 @@ def test_build_payload_sets_requested_fits_io_fields():
         z_projection="max",
     )
 
-    assert out.fits_io.axes == "TCYX"
-    assert out.fits_io.channel_labels == ["GFP", "RFP"]
-    assert out.fits_io.channel_count == 2
-    assert out.fits_io.source_channel_indices == [0, 2]
-    assert out.fits_io.artifact_channel_indices == [0, 2]
-    assert out.fits_io.z_projection == "max"
+    assert out.artifact.axes == "TCYX"
+    assert out.artifact.channel_labels == ["GFP", "RFP"]
+    assert out.artifact.channel_count == 2
+    assert out.artifact.source_channel_indices == [0, 2]
+    assert out.artifact.artifact_channel_indices == [0, 2]
+    assert out.artifact.z_projection == "max"
 
 
 def test_build_payload_merges_custom_metadata_when_provided():
-    base = FitsIOMeta(custom_metadata={"legacy": 1})
+    base = ImageMetadata(custom_metadata={"legacy": 1})
     out = assemble_payload(base, custom_metadata={"run_id": 7})
 
     assert out.custom_metadata == {"legacy": 1, "run_id": 7}
 
 
 def test_build_payload_preserves_base_custom_metadata_when_custom_missing():
-    base = FitsIOMeta(custom_metadata={"legacy": "keep"})
+    base = ImageMetadata(custom_metadata={"legacy": "keep"})
     out = assemble_payload(base)
 
     assert out.custom_metadata == {"legacy": "keep"}

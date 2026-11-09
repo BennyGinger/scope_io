@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Any, Mapping, Self, Sequence
-from fits_io.readers._types import Zproj, validate_axes
+from scope_io.readers._types import Zproj, validate_axes
 
 
 @dataclass(slots=True, frozen=True)
 class ArtifactMeta:
     """
-    Metadata container specific to fits_io.
+    Describe an image artifact independently of its producing application.
     """
     artifact_type: str | None = None
     created_by: str | None = None
@@ -58,18 +58,18 @@ class ArtifactMeta:
 
 
 @dataclass(slots=True, frozen=True)
-class FitsIOMeta:
+class ImageMetadata:
     """
-    Container for fits_io-specific metadata and any additional custom metadata. Represent the ground truth metadata for the image.
+    Pair portable image artifact metadata with application-owned custom metadata.
     """
-    fits_io: ArtifactMeta = field(default_factory=ArtifactMeta)
+    artifact: ArtifactMeta = field(default_factory=ArtifactMeta)
     custom_metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def new_revision(self, inputs: Sequence[Mapping[str, Any]] = ()) -> Self:
         """
         Create data revision provenance; ordinary metadata replacements preserve it.
         """
-        return replace(self, fits_io=replace(self.fits_io,
+        return replace(self, artifact=replace(self.artifact,
                                              created_at=datetime.now(timezone.utc).isoformat(timespec="microseconds"),
                                              derived_from=[dict(item) for item in inputs],
                                              ))
@@ -78,27 +78,23 @@ class FitsIOMeta:
     @classmethod
     def from_dict(cls, payload_dict: Mapping[str, Any]) -> Self:
         """
-        Create a FitsIOPayload instance from a dictionary representation.
+        Read neutral artifact metadata or the historical fits_io representation.
         """
-        fits_io_dict = payload_dict.get("fits_io", {})
-        if not isinstance(fits_io_dict, Mapping):
-            fits_io_dict = {}
-
-        fits_io_meta = ArtifactMeta(**fits_io_dict)
+        artifact_meta = ArtifactMeta(**_artifact_fields(payload_dict))
 
         custom_metadata = payload_dict.get("custom_metadata", {})
         if not isinstance(custom_metadata, Mapping):
             custom_metadata = {}
-        return cls(fits_io=fits_io_meta, custom_metadata=custom_metadata)
+        return cls(artifact=artifact_meta, custom_metadata=custom_metadata)
 
 
     def dump(self) -> dict[str, Any]:
         """
-        Convert the FitsIOPayload to a dictionary suitable for serialization or storage.
+        Convert the ImageMetadata to a dictionary suitable for serialization or storage.
         """
         payload: dict[str, Any] = {}
-        if self.fits_io is not None:
-            payload['fits_io'] = self.fits_io.to_dict()
+        if self.artifact is not None:
+            payload['artifact'] = self.artifact.to_dict()
         if self.custom_metadata:
             payload["custom_metadata"] = dict(self.custom_metadata)
         return payload
@@ -106,12 +102,12 @@ class FitsIOMeta:
 
     def to_info_payload(self) -> dict[str, Any]:
         """
-        Convert the FitsIOPayload to a dictionary suitable for InfoSummary.
+        Convert the ImageMetadata to a dictionary suitable for InfoSummary.
         """
-        return {"fits_io": self.fits_io.to_dict(), **dict(self.custom_metadata),}
+        return {"artifact": self.artifact.to_dict(), **dict(self.custom_metadata),}
 
 
-    def with_fitsio(self,
+    def with_artifact(self,
                     *,
                     artifact_type: str | None = None,
                     created_by: str | None = None,
@@ -124,25 +120,25 @@ class FitsIOMeta:
                     z_projection: Zproj = None,
                     ) -> Self:
         """
-        Return a new FitsIOPayload instance with updated fits_io metadata. If a parameter is None, the existing value is retained.
+        Update artifact metadata, retaining each field whose argument is None.
         """
         return replace(self,
-            fits_io=replace(self.fits_io,
-                            artifact_type=artifact_type if artifact_type is not None else self.fits_io.artifact_type,
-                            created_by=created_by if created_by is not None else self.fits_io.created_by,
-                            version=version if version is not None else self.fits_io.version,
-                            derived_from=derived_from if derived_from is not None else self.fits_io.derived_from,
-                            axes=axes if axes is not None else self.fits_io.axes,
-                            channel_labels=list(channel_labels) if channel_labels is not None else self.fits_io.channel_labels,
-                            source_channel_indices=list(source_channel_indices) if source_channel_indices is not None else self.fits_io.source_channel_indices,
-                            artifact_channel_indices=list(artifact_channel_indices) if artifact_channel_indices is not None else self.fits_io.artifact_channel_indices,
-                            z_projection=z_projection if z_projection is not None else self.fits_io.z_projection,
+            artifact=replace(self.artifact,
+                            artifact_type=artifact_type if artifact_type is not None else self.artifact.artifact_type,
+                            created_by=created_by if created_by is not None else self.artifact.created_by,
+                            version=version if version is not None else self.artifact.version,
+                            derived_from=derived_from if derived_from is not None else self.artifact.derived_from,
+                            axes=axes if axes is not None else self.artifact.axes,
+                            channel_labels=list(channel_labels) if channel_labels is not None else self.artifact.channel_labels,
+                            source_channel_indices=list(source_channel_indices) if source_channel_indices is not None else self.artifact.source_channel_indices,
+                            artifact_channel_indices=list(artifact_channel_indices) if artifact_channel_indices is not None else self.artifact.artifact_channel_indices,
+                            z_projection=z_projection if z_projection is not None else self.artifact.z_projection,
                             )
     )
 
     def with_custom_metadata(self, custom_metadata: Mapping[str, Any] | None) -> Self:
         """
-        Return a new FitsIOPayload instance with updated custom metadata. If custom_metadata is None, it will be set to an empty dictionary.
+        Return a new ImageMetadata instance with updated custom metadata. If custom_metadata is None, it will be set to an empty dictionary.
         """
         if custom_metadata is None:
             return self
@@ -150,5 +146,17 @@ class FitsIOMeta:
         merged = dict(self.custom_metadata)
         merged.update(custom_metadata)
         return replace(self, custom_metadata=merged)
+
+
+def _artifact_fields(payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    """
+    Accept either metadata key and reject conflicting duplicate representations.
+    """
+    if 'artifact' in payload and 'fits_io' in payload and payload['artifact'] != payload['fits_io']:
+        raise ValueError('Conflicting artifact and legacy fits_io metadata fields.')
+    fields = payload.get('artifact', payload.get('fits_io', {}))
+    if not isinstance(fields, Mapping):
+        raise TypeError('Artifact metadata must be a mapping.')
+    return fields
 
 

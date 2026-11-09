@@ -9,7 +9,7 @@ import numpy as np
 from numpy.typing import NDArray
 import pytest
 
-from fits_io.readers.r_nd2 import Nd2Reader
+from scope_io.readers.r_nd2 import Nd2Reader
 
 
 @pytest.mark.parametrize("loop_axes", ["TPZ", "ZPT", "PTZ"])

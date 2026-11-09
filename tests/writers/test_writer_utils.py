@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from fits_io.metadata.resolve import resolve_channel_selection
-from fits_io.writers import apis
+from scope_io.metadata.resolve import resolve_channel_selection
+from scope_io.writers import apis
 
 
 def test_prepare_conversion_uses_get_channel_for_subset(monkeypatch, dummy_reader):
@@ -32,7 +32,7 @@ def test_prepare_conversion_uses_get_channel_for_subset(monkeypatch, dummy_reade
     apis.prepare_conversion(
         dummy_reader,
         selection=selection,
-        output_name="fits.tif",)
+        output_name="array.tif",)
 
     assert calls["get_channel"] == 1
     assert calls["get_array"] == 0
@@ -56,6 +56,6 @@ def test_prepare_conversion_default_uses_all_channel_indices(monkeypatch, dummy_
     selection = resolve_channel_selection(None, 3)
 
     apis.prepare_conversion(
-        dummy_reader, selection=selection, output_name="fits.tif")
+        dummy_reader, selection=selection, output_name="array.tif")
 
     assert calls["get_channel"] == 1

@@ -149,7 +149,7 @@ class InfoSummary:
                               ) -> None:
         if not cls._has_renderable_content(value):
             return
-        
+
         scalar_items, nested_items = cls._partition_items(value)
 
         # Public levels are one-based:
@@ -190,7 +190,7 @@ class InfoSummary:
                 return True
 
         return False
-    
+
     def render(self, *, delimiter_levels: int = 2,) -> str:
         """
         Render the payload as a TOML-like ImageJ metadata summary.
@@ -204,7 +204,7 @@ class InfoSummary:
         - 3: include one additional nested level
         - 4: include one additional nested levels
         - 5: include the last additional nested levels
-        
+
         Up to 5 levels are supported. Levels beyond 5 will only use the same format as 5.
         """
         if delimiter_levels < 0:
@@ -230,11 +230,11 @@ class InfoSummary:
                 lines.append("")
 
         return "\n".join(lines).rstrip() + "\n"
-   
-            
+
+
 def make_color_lut(color: str) -> NDArray[np.uint8]:
     """Return ImageJ-style LUT: shape (3, 256), uint8."""
-    
+
     try:
         mask = np.array(COLOR_MAP[color.lower()], dtype=np.uint8)[:, None]
     except KeyError:

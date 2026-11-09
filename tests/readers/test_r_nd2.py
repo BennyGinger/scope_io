@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 import nd2
 
-from fits_io.readers.r_nd2 import Nd2Reader
+from scope_io.readers.r_nd2 import Nd2Reader
 
 
 @pytest.mark.parametrize(
@@ -66,12 +66,12 @@ def test_nd2_get_channel_single_channel_without_c_axis_returns_full_array(monkey
 
     assert isinstance(out, np.ndarray)
     assert out.shape == (2, 5, 6)
-    
+
 def test_nd2_normalize_channels_valid_int(monkeypatch, tmp_path, fake_nd2_file_3channels):
     p = tmp_path / "x.nd2"
     p.write_bytes(b"fake")
     monkeypatch.setattr(nd2, "ND2File", fake_nd2_file_3channels)
-    
+
     r = Nd2Reader(p)
     assert r._normalize_channel_indices(1) == [1]
     assert r._normalize_channel_indices([0, 2]) == [0, 2]
@@ -80,7 +80,7 @@ def test_nd2_normalize_channels_invalid_int(monkeypatch, tmp_path, fake_nd2_file
     p = tmp_path / "x.nd2"
     p.write_bytes(b"fake")
     monkeypatch.setattr(nd2, "ND2File", fake_nd2_file_3channels)
-    
+
     r = Nd2Reader(p)
     with pytest.raises(IndexError, match="out of range"):
         r._validate_channel_indices([5])

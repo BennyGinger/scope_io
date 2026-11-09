@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 import tifffile
 
-from fits_io import FitsIO
-from fits_io.readers.r_tiff import TiffReader
+from scope_io import ScopeIO
+from scope_io.readers.r_tiff import TiffReader
 
 
 @pytest.mark.parametrize("axes,shape", [
@@ -19,7 +19,7 @@ def test_get_plane_reads_only_requested_page(tmp_path, monkeypatch, axes, shape,
     array = np.arange(np.prod(shape), dtype=np.uint16).reshape(shape)
     tifffile.imwrite(path, array, photometric="minisblack", compression=compression,
                      metadata={"axes": axes})
-    reader = FitsIO.from_path(path)
+    reader = ScopeIO.from_path(path)
     monkeypatch.setattr(tifffile.TiffPageSeries, "asarray",
                         lambda *args, **kwargs: pytest.fail("Full-series read"))
     positions = {axis: shape[axes.index(axis)] - 1 if axis in axes else 0
@@ -46,7 +46,7 @@ def test_imagej_hyperstack_plane_reading(tmp_path):
     path = tmp_path / "imagej.tif"
     array = np.arange(3 * 4 * 2 * 8 * 9, dtype=np.uint16).reshape(3, 4, 2, 8, 9)
     tifffile.imwrite(path, array, imagej=True, metadata={"axes": "TZCYX"})
-    np.testing.assert_array_equal(FitsIO.from_path(path).get_plane(2, 1, 3).array,
+    np.testing.assert_array_equal(ScopeIO.from_path(path).get_plane(2, 1, 3).array,
                                   array[2, 3, 1])
 
 

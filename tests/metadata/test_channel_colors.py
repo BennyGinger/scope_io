@@ -4,10 +4,10 @@ import numpy as np
 import pytest
 from tifffile import TiffFile, imwrite
 
-from fits_io import FitsIO
-from fits_io.metadata.channel_colors import conversion_channel_labels
-from fits_io.metadata.tiff_meta import ChannelMeta
-from fits_io.readers.r_tiff import TiffReader
+from scope_io import ScopeIO
+from scope_io.metadata.channel_colors import conversion_channel_labels
+from scope_io.metadata.tiff_meta import ChannelMeta
+from scope_io.readers.r_tiff import TiffReader
 
 
 @pytest.mark.parametrize("labels, colors, expected", [
@@ -43,7 +43,7 @@ def test_user_label_overrides_source_color_in_output(tmp_path: Path, monkeypatch
     path = tmp_path / "input.tif"
     imwrite(path, np.ones((8, 8), dtype=np.uint16), imagej=True, metadata={"axes": "YX"})
     monkeypatch.setattr(TiffReader, "channel_colors", property(lambda self: ["#00ff00"]))
-    image = FitsIO.from_path(path)
+    image = ScopeIO.from_path(path)
     assert image.channel_colors == ["#00ff00"]
     selection = image.resolve_channel_selection(channel_labels=["RFP"])
     output = image.prepare_conversion(selection=selection)

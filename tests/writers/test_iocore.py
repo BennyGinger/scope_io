@@ -3,12 +3,12 @@
 # -----------------------
 
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 import numpy as np
 import pytest
 
-from fits_io.writers import core
+from scope_io.writers import core
+from scope_io.metadata.tiff_meta import TiffWriteMeta
 
 
 def test_save_tiff_raises_on_empty_array(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -20,7 +20,7 @@ def test_save_tiff_raises_on_empty_array(monkeypatch: pytest.MonkeyPatch, tmp_pa
     monkeypatch.setattr(core, "imwrite", fake_imwrite)
 
     empty = np.array([], dtype=np.uint8)
-    meta = SimpleNamespace(imagej_meta={}, resolution=None, extratags=[])
+    meta = TiffWriteMeta(imagej_meta={}, resolution=None, extratags=[])
 
     with pytest.raises(ValueError, match="Cannot save empty array"):
         core.save_tiff(empty, tmp_path / "out.tif", meta)  # type: ignore[arg-type]
@@ -33,7 +33,7 @@ def test_save_tiff_preserves_interleaved_rgb_samples_axis(tmp_path: Path) -> Non
     from tifffile import TiffFile
 
     array = np.zeros((2, 5, 6, 3), dtype=np.uint8)
-    metadata = SimpleNamespace(
+    metadata = TiffWriteMeta(
         imagej_meta={"axes": "TYXS"}, resolution=None, extratags=[])
     output = tmp_path / "rendered_tracking_display.tif"
 
@@ -42,7 +42,7 @@ def test_save_tiff_preserves_interleaved_rgb_samples_axis(tmp_path: Path) -> Non
     with TiffFile(output) as tiff:
         assert tiff.series[0].axes == "TYXS"
         assert tiff.series[0].shape == array.shape
-        assert tiff.pages[0].photometric.name == "RGB"
+        assert int(tiff.pages.first.photometric) == 2
 
 
 @pytest.mark.parametrize(
@@ -70,7 +70,7 @@ def test_save_tiff_predictor_selection(
     monkeypatch.setattr(core, "imwrite", fake_imwrite)
 
     arr = np.ones((5, 6), dtype=np.uint16)
-    meta = SimpleNamespace(imagej_meta={"axes": "YX"}, resolution=(1.0, 1.0), extratags=[])
+    meta = TiffWriteMeta(imagej_meta={"axes": "YX"}, resolution=(1.0, 1.0), extratags=[])
     out_path = tmp_path / "out.tif"
 
     core.save_tiff(arr, out_path, meta, compression=compression)  # type: ignore[arg-type]
@@ -85,20 +85,20 @@ def test_save_tiff_predictor_selection(
 
 
 @pytest.mark.parametrize("winerror", [None, 32, 33])
-def test_save_tiff_recovers_from_busy_rename(monkeypatch, tmp_path, winerror):
+def test_save_tiff_recovers_from_busy_rename(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, winerror: int | None) -> None:
     import errno
     from tifffile import imread
 
     destination = tmp_path / "out.tif"
     destination.write_bytes(b"previous output")
     replace = Path.replace
-    attempts = []
-    delays = []
+    attempts: list[Path] = []
+    delays: list[float] = []
     error = OSError(errno.EBUSY if winerror is None else errno.EACCES, "busy")
     if winerror is not None:
-        error.winerror = winerror
+        setattr(error, "winerror", winerror)
 
-    def busy_then_replace(source, target):
+    def busy_then_replace(source: Path, target: Path) -> Path:
         attempts.append(source)
         if len(attempts) <= 2:
             assert destination.read_bytes() == b"previous output"
@@ -108,7 +108,7 @@ def test_save_tiff_recovers_from_busy_rename(monkeypatch, tmp_path, winerror):
     monkeypatch.setattr(Path, "replace", busy_then_replace)
     monkeypatch.setattr(core.time, "sleep", delays.append)
     arr = np.ones((5, 6), dtype=np.uint16)
-    meta = SimpleNamespace(imagej_meta={"axes": "YX"}, resolution=None, extratags=[])
+    meta = TiffWriteMeta(imagej_meta={"axes": "YX"}, resolution=None, extratags=[])
     core.save_tiff(arr, destination, meta, compression=None)
 
     np.testing.assert_array_equal(imread(destination), arr)
@@ -121,19 +121,19 @@ def test_save_tiff_recovers_from_busy_rename(monkeypatch, tmp_path, winerror):
 @pytest.mark.parametrize("error_number, expected_attempts", [(16, 6), (13, 1), (30, 1)])
 @pytest.mark.parametrize("cleanup_fails", [False, True])
 def test_save_tiff_preserves_original_error_and_output(
-    monkeypatch, tmp_path, error_number, expected_attempts, cleanup_fails,
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, error_number: int, expected_attempts: int, cleanup_fails: bool,
+) -> None:
     destination = tmp_path / "out.tif"
     destination.write_bytes(b"previous output")
     error = OSError(error_number, "rename failed")
-    attempts = []
-    delays = []
+    attempts: list[Path] = []
+    delays: list[float] = []
 
-    def fail_replace(source, target):
+    def fail_replace(source: Path, target: Path) -> Path:
         attempts.append(source)
         raise error
 
-    def fail_cleanup(*args, **kwargs):
+    def fail_cleanup(*args: Any, **kwargs: Any) -> None:
         raise OSError("cleanup failed")
 
     monkeypatch.setattr(Path, "replace", fail_replace)
@@ -141,7 +141,7 @@ def test_save_tiff_preserves_original_error_and_output(
     if cleanup_fails:
         monkeypatch.setattr(Path, "unlink", fail_cleanup)
     arr = np.ones((5, 6), dtype=np.uint16)
-    meta = SimpleNamespace(imagej_meta={"axes": "YX"}, resolution=None, extratags=[])
+    meta = TiffWriteMeta(imagej_meta={"axes": "YX"}, resolution=None, extratags=[])
     with pytest.raises(OSError) as caught:
         core.save_tiff(arr, destination, meta, compression=None)
 

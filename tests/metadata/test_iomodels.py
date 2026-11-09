@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from fits_io.metadata.imageJ_meta import InfoSummary
-from fits_io.metadata.models import ArtifactMeta
-from fits_io.metadata.tiff_meta import ChannelMeta, ResolutionMeta, StackMeta
+from scope_io.metadata.imageJ_meta import InfoSummary
+from scope_io.metadata.models import ArtifactMeta
+from scope_io.metadata.tiff_meta import ChannelMeta, ResolutionMeta, StackMeta
 
 # -------------------------
 # StackMeta
@@ -99,7 +99,7 @@ def test_channelmeta_to_dict_includes_luts_only_when_present():
 def test_infosummary_renders_generic_fits_metadata_block():
     summary = InfoSummary(
         payload={
-            "fits_io": {
+            "artifact": {
                 "version": "1.2.3",
                 "axes": "TCYX",
                 "z_projection": "max",
@@ -121,7 +121,7 @@ def test_infosummary_renders_generic_fits_metadata_block():
     )
 
     rendered = summary.render()
-    assert "fits_io" in rendered
+    assert "artifact" in rendered
     assert 'channel_labels = ["GFP", "RFP"]' in rendered
     assert 'version = "1.2.3"' in rendered
     assert 'axes = "TCYX"' in rendered
