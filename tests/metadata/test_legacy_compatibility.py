@@ -136,6 +136,28 @@ def test_metadata_only_rewrite_preserves_encoded_pixels_and_revision(tmp_path: P
         assert tif.imagej_metadata['Overlays'] == b'preserved serialized ROI'
 
 
+def test_repeated_metadata_growth_keeps_imagej_info_and_pixels_intact(tmp_path: Path) -> None:
+    """
+    Growing both TIFF payloads repeatedly must never overwrite either metadata tag.
+    """
+    source = tmp_path / 'historical.tif'
+    pixels = _write_fixture(source, _historical_payload())
+    metadata = ScopeIO.from_path(source).metadata
+    ScopeIO.from_path(source).save_array(pixels, metadata=metadata, output_path=source,
+                                        imagej_overlays=[b'preserved serialized ROI'])
+    encoded = _encoded_pixels(source)
+    for size in (1024, 4096, 16384):
+        metadata = metadata.with_custom_metadata({**metadata.custom_metadata, 'migration_note': 'migration ' * size})
+        rewrite_metadata(source, metadata)
+        assert _stored_payload(source) == metadata.dump()
+        assert _encoded_pixels(source) == encoded
+        np.testing.assert_array_equal(tifffile.imread(source), pixels)
+        with tifffile.TiffFile(source) as tif:
+            assert tif.imagej_metadata is not None
+            assert 'migration ' * size in tif.imagej_metadata['Info']
+            assert tif.imagej_metadata['Overlays'] == b'preserved serialized ROI'
+
+
 def test_matching_dual_keys_are_accepted_and_written_once() -> None:
     """
     A transitional duplicate is harmless only when both representations agree.
